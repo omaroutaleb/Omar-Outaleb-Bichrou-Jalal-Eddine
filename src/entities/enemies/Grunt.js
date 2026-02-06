@@ -1,63 +1,75 @@
 // ============================================
-// Grunt - Basic Melee Pursuer
+// Grunt - Ennemi de base qui poursuit le joueur
 // ============================================
 
 import { Enemy, EnemyState } from './Enemy.js';
 import { Vec2 } from '../../math/Vec2.js';
-import { GRUNT, COLORS, WORLD } from '../../config.js';
-import { Steering } from '../../steering/Steering.js';
-import * as Behaviors from '../../steering/Behaviors.js';
+import { GRUNT, COLORS } from '../../config.js';
 
 export class Grunt extends Enemy {
     constructor(x, y) {
         super(x, y, GRUNT.RADIUS, GRUNT);
         this.baseColor = COLORS.GRUNT;
-        this.state = EnemyState.PURSUING;
     }
     
     calculateSteering(dt, player, spatialHash, obstacles, bounds) {
-        const forces = [];
-        const weights = [];
+        // Toujours poursuivre le joueur
+        this.setState(EnemyState.PURSUING);
         
-        // Main behavior: Pursue player
-        forces.push(Behaviors.pursue(this, player, 0.3));
-        weights.push(GRUNT.PURSUE_WEIGHT);
+        // ETAPE 1: Force de poursuite (Seek)
+        let pursueForce = this.seek(player.pos);
+        pursueForce = pursueForce.mult(GRUNT.PURSUE_WEIGHT);
         
-        // Separation from other enemies
-        const neighbors = spatialHash.queryNear(this, GRUNT.SEPARATION_RADIUS);
-        forces.push(Behaviors.separation(this, neighbors, GRUNT.SEPARATION_RADIUS));
-        weights.push(GRUNT.SEPARATION_WEIGHT);
+        // ETAPE 2: Force de séparation des autres ennemis
+        const neighbors = spatialHash ? 
+            spatialHash.query(this, GRUNT.SEPARATION_RADIUS) : [];
+        let separationForce = this.separation(neighbors, GRUNT.SEPARATION_RADIUS);
+        separationForce = separationForce.mult(GRUNT.SEPARATION_WEIGHT);
         
-        // Avoid obstacles
-        forces.push(Behaviors.avoidObstacles(this, obstacles));
-        weights.push(GRUNT.OBSTACLE_AVOIDANCE_WEIGHT);
+        // ETAPE 3: Évitement d'obstacles
+        let avoidForce = this.avoid(obstacles);
+        avoidForce = avoidForce.mult(GRUNT.OBSTACLE_AVOIDANCE_WEIGHT);
         
-        // Stay in bounds
-        forces.push(Behaviors.containWithinBounds(this, bounds, 80));
-        weights.push(GRUNT.BOUNDARY_WEIGHT);
+        // ETAPE 4: Rester dans les limites
+        let boundaryForce = this.containWithinBounds(bounds);
+        boundaryForce = boundaryForce.mult(GRUNT.BOUNDARY_WEIGHT);
         
-        return Steering.combine(forces, weights);
+        // Combinaison des forces
+        const totalForce = Vec2.zero();
+        totalForce.addSelf(pursueForce);
+        totalForce.addSelf(separationForce);
+        totalForce.addSelf(avoidForce);
+        totalForce.addSelf(boundaryForce);
+        
+        return totalForce;
     }
     
-    draw(p5) {
-        this.drawBase(p5, this.baseColor, 'circle');
+    // Rester dans les limites du monde
+    containWithinBounds(bounds, margin = 50) {
+        if (!bounds) return Vec2.zero();
         
-        // Add angry eyes
-        p5.push();
-        p5.translate(this.pos.x, this.pos.y);
+        const steer = Vec2.zero();
         
-        const dir = this.vel.isZero() ? new Vec2(1, 0) : this.vel.normalize();
+        if (this.pos.x < bounds.left + margin) {
+            steer.x = this.maxSpeed;
+        } else if (this.pos.x > bounds.right - margin) {
+            steer.x = -this.maxSpeed;
+        }
         
-        p5.fill(255);
-        p5.noStroke();
+        if (this.pos.y < bounds.top + margin) {
+            steer.y = this.maxSpeed;
+        } else if (this.pos.y > bounds.bottom - margin) {
+            steer.y = -this.maxSpeed;
+        }
         
-        // Two small eyes
-        const eyeOffset = dir.mult(this.radius * 0.3);
-        const perpOffset = new Vec2(-dir.y, dir.x).mult(this.radius * 0.4);
+        if (!steer.isZero()) {
+            steer.subSelf(this.vel);
+        }
         
-        p5.circle(eyeOffset.x + perpOffset.x, eyeOffset.y + perpOffset.y, 5);
-        p5.circle(eyeOffset.x - perpOffset.x, eyeOffset.y - perpOffset.y, 5);
-        
-        p5.pop();
+        return steer;
+    }
+    
+    show(p5) {
+        this.showBase(p5, this.baseColor, 'triangle');
     }
 }

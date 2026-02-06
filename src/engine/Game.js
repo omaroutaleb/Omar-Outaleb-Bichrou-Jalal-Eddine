@@ -186,7 +186,7 @@ export class Game {
         if (this.input.isMouseJustPressed(0) || this.input.isMouseDown(0)) { // Auto-fire on hold
             if (this.player.startAttack()) {
                 const attackDir = this.player.aimDirection;
-                const attackPos = this.player.pos.add(attackDir.mult(this.player.radius * 1.5));
+                const attackPos = this.player.pos.add(attackDir.mult(this.player.r * 1.5));
                 this.particles.swordSwing(attackPos.x, attackPos.y, attackDir.heading()); // Reusing effect as muzzle flash
                 this.audio.playHit(); // Using hit sound as shot sound vs nothing
             }
@@ -263,7 +263,7 @@ export class Game {
             if (!proj.alive) continue;
             
             const dist = this.player.pos.dist(proj.pos);
-            if (dist < this.player.radius + proj.radius) {
+            if (dist < this.player.r + proj.radius) {
                 if (this.player.takeDamage(proj.damage)) {
                     this.audio.playPlayerHit();
                     this.particles.hitSpark(proj.pos.x, proj.pos.y, '#fa0');
@@ -285,7 +285,7 @@ export class Game {
             const boss = this.spawner.boss;
             if (!boss.slamHitPlayer && boss.slamTimer < 0.3 && boss.slamTimer > 0.25) {
                 const dist = this.player.pos.dist(boss.pos);
-                if (dist < 150 + this.player.radius) { // BOSS.SLAM_RADIUS
+                if (dist < 150 + this.player.r) { // BOSS.SLAM_RADIUS
                     if (this.player.takeDamage(35)) { // BOSS.SLAM_DAMAGE
                         this.audio.playBossSlam();
                         this.particles.bossSlam(boss.pos.x, boss.pos.y, 150);
@@ -296,7 +296,7 @@ export class Game {
     }
     
     constrainToWorld(entity) {
-        const margin = entity.radius;
+        const margin = entity.r !== undefined ? entity.r : entity.radius;
         entity.pos.x = Math.max(margin, Math.min(WORLD.WIDTH - margin, entity.pos.x));
         entity.pos.y = Math.max(margin, Math.min(WORLD.HEIGHT - margin, entity.pos.y));
     }
@@ -334,7 +334,7 @@ export class Game {
         
         // Draw enemies
         for (const enemy of this.spawner.enemies) {
-            enemy.draw(p5);
+            enemy.show(p5);
             
             if (this.debug.enabled) {
                 this.debug.drawHitbox(p5, enemy, '#f44');
@@ -344,7 +344,7 @@ export class Game {
         
         // Draw boss
         if (this.spawner.boss && this.spawner.boss.alive) {
-            this.spawner.boss.draw(p5);
+            this.spawner.boss.show(p5);
             
             if (this.debug.enabled) {
                 this.debug.drawHitbox(p5, this.spawner.boss, '#ff0');
@@ -353,7 +353,7 @@ export class Game {
         }
         
         // Draw player
-        this.player.draw(p5);
+        this.player.show(p5);
         
         if (this.debug.enabled) {
             this.debug.drawHitbox(p5, this.player, '#0f0');

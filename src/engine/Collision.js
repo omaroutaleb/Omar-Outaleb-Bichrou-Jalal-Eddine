@@ -1,16 +1,22 @@
 // ============================================
 // Collision - Detection and Resolution
+// Détection et résolution de collisions
 // ============================================
 
 import { Vec2 } from '../math/Vec2.js';
 
 export class Collision {
+    // Helper: obtenir le rayon (supporte 'r' ou 'radius')
+    static getRadius(entity) {
+        return entity.r !== undefined ? entity.r : entity.radius;
+    }
+    
     // Circle-circle collision check
     static circleCircle(a, b) {
         const dx = b.pos.x - a.pos.x;
         const dy = b.pos.y - a.pos.y;
         const distSq = dx * dx + dy * dy;
-        const radiiSum = a.radius + b.radius;
+        const radiiSum = this.getRadius(a) + this.getRadius(b);
         return distSq < radiiSum * radiiSum;
     }
     
@@ -19,7 +25,7 @@ export class Collision {
         const dx = b.pos.x - a.pos.x;
         const dy = b.pos.y - a.pos.y;
         const distSq = dx * dx + dy * dy;
-        const radiiSum = a.radius + b.radius;
+        const radiiSum = this.getRadius(a) + this.getRadius(b);
         
         if (distSq >= radiiSum * radiiSum) {
             return null;
@@ -48,7 +54,8 @@ export class Collision {
         const dy = circle.pos.y - closestY;
         const distSq = dx * dx + dy * dy;
         
-        return distSq < circle.radius * circle.radius;
+        const r = this.getRadius(circle);
+        return distSq < r * r;
     }
     
     // Circle-rectangle with penetration info
@@ -59,14 +66,15 @@ export class Collision {
         const dx = circle.pos.x - closestX;
         const dy = circle.pos.y - closestY;
         const distSq = dx * dx + dy * dy;
-        const radiusSq = circle.radius * circle.radius;
+        const r = this.getRadius(circle);
+        const radiusSq = r * r;
         
         if (distSq >= radiusSq) {
             return null;
         }
         
         const dist = Math.sqrt(distSq);
-        const overlap = circle.radius - dist;
+        const overlap = r - dist;
         
         let normal;
         if (dist === 0) {
@@ -129,6 +137,6 @@ export class Collision {
     
     // Check if circle center is in arc
     static circleInArc(circle, origin, direction, range, arcAngle) {
-        return this.pointInArc(circle.pos, origin, direction, range + circle.radius, arcAngle);
+        return this.pointInArc(circle.pos, origin, direction, range + this.getRadius(circle), arcAngle);
     }
 }

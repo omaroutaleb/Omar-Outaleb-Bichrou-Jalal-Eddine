@@ -1,23 +1,25 @@
 // ============================================
-// Player - Player Character
+// Player - Personnage du joueur (style soldat)
 // ============================================
 
-import { Entity } from './Entity.js';
+import { Vehicle } from './Entity.js';
 import { Vec2 } from '../math/Vec2.js';
 import { PLAYER, COLORS } from '../config.js';
 
-export class Player extends Entity {
+export class Player extends Vehicle {
     constructor(x, y) {
         super(x, y, PLAYER.RADIUS);
         
+        // Propriétés de mouvement
         this.maxSpeed = PLAYER.MAX_SPEED;
         this.acceleration = PLAYER.ACCELERATION;
         this.friction = PLAYER.FRICTION;
         
+        // Points de vie
         this.maxHp = PLAYER.MAX_HP;
         this.hp = this.maxHp;
         
-        // Combat stats
+        // Statistiques de combat
         this.damage = PLAYER.ATTACK_DAMAGE;
         this.attackRange = PLAYER.ATTACK_RANGE;
         this.attackArc = PLAYER.ATTACK_ARC;
@@ -36,7 +38,7 @@ export class Player extends Entity {
         this.dashCooldownTimer = 0;
         this.invulnDuration = PLAYER.INVULN_DURATION;
         
-        // State
+        // État
         this.isAttacking = false;
         this.isDashing = false;
         this.aimDirection = new Vec2(1, 0);
@@ -58,7 +60,7 @@ export class Player extends Entity {
     }
     
     update(dt, input, enemies) {
-        // Update timers
+        // Mise à jour des timers
         if (this.attackTimer > 0) {
             this.attackTimer -= dt;
             if (this.attackTimer <= 0) {
@@ -86,55 +88,52 @@ export class Player extends Entity {
         
         let isMoving = false;
         
-        // Movement
+        // Mouvement
         if (!this.isDashing) {
             const moveInput = input.getMovementVector();
             
             if (!moveInput.isZero()) {
                 isMoving = true;
-                this.walkTimer += dt * 15; // Animation speed
+                this.walkTimer += dt * 15; // Vitesse d'animation
                 
-                // Accelerate in input direction
+                // Accélérer dans la direction d'entrée
                 const accel = moveInput.mult(this.acceleration * dt);
                 this.vel.addSelf(accel);
             } else {
                 this.walkTimer = 0;
-                // Apply friction when no input
+                // Appliquer la friction sans entrée
                 this.vel.multSelf(1 - this.friction * dt);
             }
             
-            // Clamp to max speed
+            // Limiter à la vitesse maximale
             this.vel.limitSelf(this.maxSpeed);
         } else {
-            // Dashing - move in dash direction at dash speed
+            // Dash - se déplacer dans la direction du dash
             this.vel = this.dashDirection.mult(this.dashSpeed);
         }
         
-        // Auto-Aim Logic & Auto-Fire
+        // Logique de visée automatique et tir
         const nearestEnemy = this.findNearestEnemy(enemies);
         if (nearestEnemy) {
             this.aimDirection = nearestEnemy.pos.sub(this.pos).normalize();
-            this.startAttack(); // Auto-fire if enemy in range
+            this.startAttack(); // Tir automatique si ennemi à portée
         } else {
-            // Fallback to mouse if no enemy nearby
+            // Repli sur la souris si pas d'ennemi proche
             const mousePos = input.getWorldMousePos();
             const toMouse = mousePos.sub(this.pos);
             if (!toMouse.isZero()) {
-                // Determine direction based on movement if not aiming at enemy
                 if (isMoving) {
-                    // Optional: Look where moving if not aiming?
-                    // For now keep mouse aim as fallback
-                     this.aimDirection = toMouse.normalize();
+                    this.aimDirection = toMouse.normalize();
                 } else {
                     this.aimDirection = toMouse.normalize();
                 }
             }
         }
         
-        // Update position
+        // Mise à jour de la position
         this.pos.addSelf(this.vel.mult(dt));
         
-        // Update projectiles
+        // Mise à jour des projectiles
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const p = this.projectiles[i];
             p.pos.addSelf(p.vel.mult(dt));
@@ -166,15 +165,15 @@ export class Player extends Entity {
         if (this.attackCooldownTimer > 0) return false;
         
         this.isAttacking = true;
-        this.attackTimer = 0.1; // Short visual recoil
+        this.attackTimer = 0.1; // Court recul visuel
         this.attackCooldownTimer = this.attackCooldown;
         
-        // Fire projectile
+        // Tirer un projectile
         this.projectiles.push({
-            pos: this.pos.add(this.aimDirection.mult(this.radius)),
+            pos: this.pos.add(this.aimDirection.mult(this.r)),
             vel: this.aimDirection.mult(PLAYER.PROJECTILE_SPEED),
             radius: PLAYER.PROJECTILE_RADIUS,
-            damage: PLAYER.PROJECTILE_DAMAGE + (this.damage - PLAYER.ATTACK_DAMAGE), // Apply upgrades
+            damage: PLAYER.PROJECTILE_DAMAGE + (this.damage - PLAYER.ATTACK_DAMAGE),
             lifetime: PLAYER.PROJECTILE_LIFETIME,
             alive: true
         });
@@ -185,7 +184,7 @@ export class Player extends Entity {
     startDash() {
         if (this.dashCooldownTimer > 0 || this.isDashing) return false;
         
-        // Dash in movement direction if moving, otherwise aim direction
+        // Dash dans la direction du mouvement si en mouvement
         if (!this.vel.isZero() && this.vel.mag() > 10) {
             this.dashDirection = this.vel.normalize();
         } else {
@@ -195,7 +194,7 @@ export class Player extends Entity {
         this.isDashing = true;
         this.dashTimer = this.dashDuration;
         this.dashCooldownTimer = this.dashCooldown;
-        this.invulnTimer = this.dashDuration; // Invulnerable during dash
+        this.invulnTimer = this.dashDuration; // Invulnérable pendant le dash
         
         return true;
     }
@@ -223,7 +222,7 @@ export class Player extends Entity {
         this.coins += amount;
     }
     
-    // Apply an upgrade
+    // Appliquer une amélioration
     applyUpgrade(upgrade) {
         switch(upgrade.type) {
             case 'maxHp':
@@ -240,36 +239,37 @@ export class Player extends Entity {
                 this.dashCooldown = Math.max(0.2, this.dashCooldown - upgrade.value);
                 break;
             case 'attackArc':
-                // For gun, maybe increase projectile size or speed?
-                // Keeping as dummy for now or converting to Fire Rate could be good
                 this.attackCooldown = Math.max(0.1, this.attackCooldown * 0.9);
                 break;
             case 'attackRange':
-                // Increase projectile lifetime/speed
                 PLAYER.PROJECTILE_SPEED += 50;
                 break;
         }
     }
     
-    draw(p5) {
+    // ========================================
+    // Affichage
+    // ========================================
+    
+    show(p5) {
         p5.push();
         p5.translate(this.pos.x, this.pos.y);
         
-        // Flash when hit or invulnerable
+        // Flash quand touché ou invulnérable
         const flashing = this.hitFlashTimer > 0 || (this.invulnTimer > 0 && Math.floor(this.invulnTimer * 10) % 2 === 0);
         
-        // Draw dash trail
+        // Traînée du dash
         if (this.isDashing) {
             p5.noStroke();
             p5.fill(68, 170, 255, 100);
             for (let i = 1; i <= 3; i++) {
                 const trailPos = this.dashDirection.mult(-i * 15);
-                const size = this.radius * 2 * (1 - i * 0.2);
+                const size = this.r * 2 * (1 - i * 0.2);
                 p5.circle(trailPos.x, trailPos.y, size);
             }
         }
         
-        // Check facing direction
+        // Vérifier la direction
         const isLeft = this.aimDirection.x < 0;
         
         p5.push();
@@ -277,61 +277,63 @@ export class Player extends Entity {
             p5.scale(-1, 1);
         }
         
-        // Bobbing animation
+        // Animation de balancement
         const bob = Math.sin(this.walkTimer) * 3;
         p5.translate(0, bob);
         
         if (this.sprite) {
-            // Draw Sprite
+            // Dessiner le sprite
             if (flashing) {
-                p5.tint(255); // Just simple tint, ideally we use shader for white flash but this is close enough
-                // Or draw white rect over it
+                p5.tint(255);
             }
             
             p5.imageMode(p5.CENTER);
-            // Scale sprite to fit radius roughly (adjust scale as needed)
-            // Visual size should be slightly larger than hitbox for top-down view
-            const scale = (this.radius * 3.5) / 32; // Increased multiplier for better visibility
-            p5.scale(scale); 
-            p5.image(this.sprite, 0, -8); // Offset slightly up to center on feet
+            const scale = (this.r * 3.5) / 32;
+            p5.scale(scale);
+            p5.image(this.sprite, 0, -8);
         } else {
-            // Fallback Rendering
-            
-            // Rotate body to face aim direction (only for simple shapes)
-            // But we are in scale(-1, 1) mode so rotation needs correction if we used it.
-            // Simplified fallback:
-            
-            p5.scale(isLeft ? -1 : 1, 1); 
+            // Rendu de secours
+            p5.scale(isLeft ? -1 : 1, 1);
             const aimAngle = this.aimDirection.heading();
             p5.rotate(aimAngle);
 
             if (flashing) {
                 p5.fill(255);
                 p5.noStroke();
-                p5.circle(0, 0, this.radius * 2);
+                p5.circle(0, 0, this.r * 2);
             } else {
                 p5.fill(COLORS.PLAYER_GUN);
                 p5.noStroke();
-                p5.rect(0, -4, this.radius * 1.8, 8); 
+                p5.rect(0, -4, this.r * 1.8, 8);
                 p5.fill(COLORS.PLAYER);
-                p5.circle(0, 0, this.radius * 2);
+                p5.circle(0, 0, this.r * 2);
                 p5.fill(COLORS.PLAYER_HELMET);
-                p5.arc(0, 0, this.radius * 2, this.radius * 2, -p5.HALF_PI - 1, -p5.HALF_PI + 1, p5.CHORD);
+                p5.arc(0, 0, this.r * 2, this.r * 2, -p5.HALF_PI - 1, -p5.HALF_PI + 1, p5.CHORD);
             }
         }
         p5.pop();
         
+        // Mode debug
+        if (Vehicle.debug) {
+            p5.stroke(0, 255, 0);
+            p5.strokeWeight(2);
+            p5.line(0, 0, this.vel.x * 0.5, this.vel.y * 0.5);
+            
+            p5.stroke(255, 0, 0);
+            p5.line(0, 0, this.aimDirection.x * 30, this.aimDirection.y * 30);
+        }
+        
         p5.pop();
         
-        // Draw projectiles
-        for (const p of this.projectiles) {
+        // Dessiner les projectiles
+        for (const proj of this.projectiles) {
             p5.push();
             p5.noStroke();
             p5.fill(PLAYER.PROJECTILE_COLOR);
-            p5.circle(p.pos.x, p.pos.y, p.radius * 2);
-            // Trail
+            p5.circle(proj.pos.x, proj.pos.y, proj.radius * 2);
+            // Traînée
             p5.fill(255, 255, 100, 100);
-            p5.circle(p.pos.x - p.vel.x * 0.01, p.pos.y - p.vel.y * 0.01, p.radius * 1.5);
+            p5.circle(proj.pos.x - proj.vel.x * 0.01, proj.pos.y - proj.vel.y * 0.01, proj.radius * 1.5);
             p5.pop();
         }
     }
