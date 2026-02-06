@@ -1,98 +1,215 @@
-# Antigravity Project Guidelines (p5.js 2D Arena)
+# Guide de Codage - Style "Antigravity"
 
-These rules are mandatory. If a rule conflicts with another, follow the one that most improves: (1) runnable project, (2) simplicity, (3) clarity.
+Ce document synthétise les pratiques de codage, les noms de méthodes et les structures récurrentes observées dans les projets 1 à 10. Il doit servir de référence pour tout nouveau développement afin de conserver une cohérence avec le style du "professeur".
 
-## 1) Product constraints
-- Target: a simple 2D top-down arena game in the browser using p5.js.
-- No copyrighted assets, names, logos, or direct text from the referenced game; use original naming and procedural shapes.
-- Must run as a static site: open via a local server (documented in README).
+## 1. Structure Générale d'un Projet
 
-## 2) Definition of “done”
-- The project runs without errors from a local static server.
-- Player can move, dash, aim, and attack.
-- Enemies spawn in waves and use steering behaviors (Reynolds-style) to navigate and engage.
-- Boss spawns after final wave, has a visible boss bar, and can be defeated.
-- HUD shows HP, coins, level, timer, objective, minimap; debug overlay exists.
-- Codebase has a coherent architecture with ES module imports and no missing files.
+Chaque projet suit généralement cette structure :
+- `index.html` : Charge les librairies (p5.js, p5.dom.js, tf.js si besoin) et les scripts du projet.
+- `sketch.js` : Point d'entrée principal. Contient `setup()` et `draw()`, ainsi que les variables globales.
+- `vehicle.js` (ou `boid.js`, `agent.js`) : Classe définissant l'agent autonome.
+- `target.js` / `obstacle.js` / `boundary.js` : Classes pour les autres entités.
 
-## 3) Architecture rules
-- Use ES modules and the specified file structure.
-- Game loop:
-  - Use fixed timestep simulation (e.g., 1/60s) with an accumulator.
-  - Rendering can happen every frame; simulation steps are discrete.
-- Separate responsibilities:
-  - `entities/*` contain state + update logic; no direct DOM manipulation.
-  - `ui/*` draws HUD only; reads from game state.
-  - `steering/*` contains math and behaviors; behavior functions are pure (no side effects).
-  - `engine/*` contains loop, input, camera, collision, spatial hash, debug.
-- Do not use p5.Vector in simulation logic; use the project Vec2 class.
+## 2. Variables Globales (dans `sketch.js`)
 
-## 4) Steering behaviors (Craig Reynolds principles)
-- Implement behaviors as forces (accelerations) applied to velocity:
-  - Seek, Flee, Arrive
-  - Pursue, Evade
-  - Wander
-  - Separation, Cohesion, Alignment
-  - Obstacle avoidance (simple) and boundary containment
-- Combine multiple forces with weights:
-  - Sum weighted forces
-  - Clamp to `maxForce`
-  - Integrate velocity, clamp to `maxSpeed`
-- Avoid jitter:
-  - Use smoothing on wander direction.
-  - Use arrive near target radius.
-- Neighbor queries for group behaviors MUST use `SpatialHash` (no O(n²) scans).
+Les déclarations se font au tout début du fichier.
+*Pattern récurrent :*
+```javascript
+let target;
+let vehicles = [];
+let obstacles = [];
+let nbVehicules = 10;
+// Sliders UI
+let vitesseMaxSlider, forceMaxSlider, nbVehiculesSlider;
+// Débug
+let debug = false; // Souvent static dans la classe Vehicle aussi
+```
 
-## 5) Performance rules
-- Use Spatial Hash / uniform grid:
-  - Insert entities each simulation step
-  - Query by radius for neighbors and collision candidates
-- Avoid per-frame allocations in hot paths:
-  - Reuse Vec2 temporaries where reasonable
-  - Keep arrays small; clear and reuse buffers if needed
-- Target: 60 FPS with ~100 enemies on a typical laptop.
+## 3. La Classe `Vehicle` (Standard)
 
-## 6) Collision rules
-- Prefer circle collisions for dynamic entities.
-- Obstacles are rectangles (AABB).
-- Minimum viable:
-  - Player vs obstacles: prevent penetration by pushing out along smallest axis.
-  - Enemy vs obstacles: simple avoidance + push-out.
-  - Sword arc: detect enemies within arc sector (angle + distance).
-  - Projectiles: circle hit test.
+### Propriétés du Constructeur
+```javascript
+constructor(x, y) {
+  this.pos = createVector(x, y);
+  this.vel = createVector(0, 0); // Parfois random2D()
+  this.acc = createVector(0, 0);
+  this.maxSpeed = 4;
+  this.maxForce = 0.2;
+  this.r = 16; // Rayon pour le dessin/collision
+  this.perceptionRadius = 50; // Pour les boids/vision
+}
+```
 
-## 7) Gameplay simplicity rules
-- Choose the simplest implementation that still feels complete:
-  - One arena map
-  - Three enemy archetypes + boss
-  - Basic upgrades (3 random choices on level up) with pause overlay
-- Avoid complex inventories, crafting, or meta-progression.
+### Méthodes Clés
+*Les noms de méthodes doivent être respectés.*
 
-## 8) UI/UX rules
-- HUD must be readable:
-  - HP bar clearly visible
-  - Objective text visible at all times
-  - Boss bar appears only when boss alive
-- Minimap: radar-style is enough (player center + nearby dots).
-- Provide a restart flow after victory/defeat.
+#### Physique Eulérienne (`update`)
+Toujours implémentée ainsi :
+```javascript
+update() {
+  this.vel.add(this.acc);
+  this.vel.limit(this.maxSpeed);
+  this.pos.add(this.vel);
+  this.acc.set(0, 0); // Reset accélération
+  // Gestion optionnelle : trainée (path), durée de vie
+}
+```
 
-## 9) Debug & tuning
-- Add a debug toggle key:
-  - Show steering vectors, target points, neighbor radius, FPS
-- All tunables go to `config.js`:
-  - Speeds, forces, weights, radii, spawn counts, wave count, XP thresholds
-- Provide comments in config describing what each parameter affects.
+#### Application des Forces (`applyForce` et `applyBehaviors`)
+```javascript
+applyForce(force) {
+  this.acc.add(force);
+}
 
-## 10) README requirements
-README must include:
-- How to run (local server command)
-- Controls
-- AI overview: list steering behaviors and where weights are configured
-- Troubleshooting tips (e.g., “must use a local server for ES modules”)
+applyBehaviors(target, obstacles, vehicles) {
+  // Calculs des forces
+  let seekForce = this.seek(target);
+  let avoidForce = this.avoid(obstacles);
+  // Pondération
+  seekForce.mult(1);
+  avoidForce.mult(3);
+  // Application
+  this.applyForce(seekForce);
+  this.applyForce(avoidForce);
+}
+```
 
-## 11) Output formatting (for Antigravity)
-- Output each file with an explicit header:
-  - `--- FILE: path/to/file ---`
-- Do not use placeholders like “TODO: code here” for core features.
-- Ensure imports/exports are correct and consistent.
-- If you must cut scope, cut optional audio first, then fancy particles, then minimap details—never cut core loop, input, steering, spawning, boss fight.
+#### Affichage (`show`)
+Toujours utiliser `push()` et `pop()` avec `translate()` et `rotate()`.
+```javascript
+show() {
+  push();
+  translate(this.pos.x, this.pos.y);
+  rotate(this.vel.heading());
+  // Dessin (triangle, cercle, image...)
+  triangle(-this.r, -this.r/2, -this.r, this.r/2, this.r, 0);
+  pop();
+}
+```
+
+## 4. Comportements (Steering Behaviors)
+
+Voici la signature standard et la logique des comportements.
+
+### Seek (Poursuite)
+Le code du prof commente souvent "ETAPE 1" et "ETAPE 2".
+```javascript
+seek(target) {
+  // ETAPE 1 : Vitesse désirée (vers la cible)
+  let desired = p5.Vector.sub(target, this.pos);
+  desired.setMag(this.maxSpeed);
+
+  // ETAPE 2 : Force de pilotage (Steering force)
+  let steer = p5.Vector.sub(desired, this.vel);
+  steer.limit(this.maxForce);
+  return steer;
+}
+```
+
+### Arrive (Arrivée en douceur)
+Comme seek, mais ralentit dans un rayon donné.
+```javascript
+arrive(target) {
+  // ... calcul vecteur desired ...
+  let d = desired.mag();
+  if (d < 100) { // Rayon de ralentissement
+    let m = map(d, 0, 100, 0, this.maxSpeed);
+    desired.setMag(m);
+  } else {
+    desired.setMag(this.maxSpeed);
+  }
+  // ... steering ...
+}
+```
+
+### Wander (Errance)
+Utilise la projection d'un cercle devant le véhicule.
+*Variables :* `wanderDistance`, `wanderRadius`, `wanderTheta`.
+```javascript
+wander() {
+  // Point devant
+  let center = this.vel.copy();
+  center.setMag(this.wanderDistance);
+  center.add(this.pos);
+  // Point sur le cercle
+  let offset = createVector(this.wanderRadius * cos(this.wanderTheta), this.wanderRadius * sin(this.wanderTheta));
+  let target = p5.Vector.add(center, offset);
+  // Déplacement aléatoire
+  this.wanderTheta += random(-0.1, 0.1);
+  // Force (Seek vers le point cible)
+  return this.seek(target);
+}
+```
+
+### Path Following (Suivi de Chemin)
+*Observé dans 5-2-PathFollowing*
+Utilise une fonction utilitaire pour la projection scalaire.
+```javascript
+// Fonction utilitaire (souvent hors classe)
+function findProjection(pos, a, b) {
+  let v1 = p5.Vector.sub(a, pos);
+  let v2 = p5.Vector.sub(b, pos);
+  v2.normalize();
+  let sp = v1.dot(v2);
+  v2.mult(sp);
+  v2.add(pos);
+  return v2;
+}
+
+// Dans la classe Vehicle
+follow(path) {
+  // 1. Prédire le futur
+  let future = this.vel.copy();
+  future.mult(20);
+  future.add(this.pos);
+
+  // 2. Projeter sur le chemin
+  let target = findProjection(path.start, future, path.end);
+
+  // 3. Vérifier la distance
+  let d = p5.Vector.dist(future, target);
+  if (d > path.radius) {
+    return this.seek(target);
+  } else {
+    return createVector(0, 0);
+  }
+}
+```
+
+### Avoid (Évitement d'obstacles)
+Logique : Projeter un vecteur `ahead`, vérifier l'intersection avec des cercles (obstacles), calculer une force latérale/normale pour esquiver.
+
+## 5. Algorithmes Génétiques
+
+*Observé dans 10-missiles genetic algo et 9-VoitureSuitCircuit*
+
+### Structure des Classes
+*   **Rocket / Agent** : Possède un `dna` (génome) et une `fitness`.
+*   **DNA** : Gère les gènes (tableaux de vecteurs ou poids neuronaux), le `crossover` et la `mutation`.
+*   **Population** : Gère le tableau d'agents, la sélection naturelle (`matingPool` ou roulette wheel).
+
+### Logique Spécifique (Rocket)
+Le mouvement est déterminé par les gènes lus séquentiellement.
+```javascript
+run() {
+  this.applyForce(this.dna.genes[this.geneCounter]);
+  this.geneCounter = (this.geneCounter + 1) % this.dna.genes.length;
+  this.update();
+}
+```
+
+### Fonction de Fitness
+Souvent exponentielle pour favoriser grandement les meilleurs.
+```javascript
+calcFitness() {
+  // ... calcul de la fitness de base ...
+  this.fitness = pow(this.fitness, 4); // Exponentielle
+}
+```
+
+## 6. Conventions de Codage Spécifiques
+
+*   **Commentaires** : Le code est souvent commenté en Français, expliquant la physique (ex: "vitesse = dérivée de la position").
+*   **Debug** : Utilisation de `Vehicle.debug` (static bool) pour afficher/masquer les vecteurs (lignes rouges/vertes), rayons de perception et cercles d'errance.
+*   **Vecteurs** : Utilisation intensive de `p5.Vector` (`copy()`, `add()`, `sub()`, `mult()`, `dist()`, `limit()`, `setMag()`).
+*   **UI** : Création de sliders HTML/p5 dans `setup()` pour ajuster `maxSpeed`, `maxForce` ou les poids des comportements en temps réel.
